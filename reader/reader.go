@@ -8,24 +8,29 @@ import (
 )
 
 func NewReader(out io.Writer) interface{} {
+	const autoOffsetReset = "earliest"
+	const groupId = "someGroup"
+	const bootstrapServers = "localhost:9094"
 	var topic = "someTopic"
 
 	reads := make(chan string, 3)
+
 	kafkaConsumerConfig := &kafka.ConfigMap{
-		"bootstrap.servers": "localhost:9094",
-		"group.id":          "someGroup",
-		"auto.offset.reset": "earliest",
+		"bootstrap.servers": bootstrapServers,
+		"group.id":          groupId,
+		"auto.offset.reset": autoOffsetReset,
 	}
 
 	c, err := kafka.NewConsumer(kafkaConsumerConfig)
 	if err != nil {
 		panic(err)
 	}
+	defer c.Close()
 
-	//var rebalanceCallback kafka.RebalanceCb = nil
-	//consumerSubscribeTopics(err, c, rebalanceCallback)
-	//consumerSubscribe(err, c, topic, rebalanceCallback)
-	consumerAssign(err, c, topic)
+	var rebalanceCallback kafka.RebalanceCb = nil
+	consumerSubscribeTopics(c, topic, rebalanceCallback)
+	//consumerSubscribe(c, topic, rebalanceCallback)
+	//consumerAssign(c, topic)
 
 	go func() {
 		for range 12 {
@@ -50,22 +55,22 @@ func NewReader(out io.Writer) interface{} {
 	return nil
 }
 
-func consumerSubscribeTopics(err error, c *kafka.Consumer, rebalanceCallback kafka.RebalanceCb) {
-	err = c.SubscribeTopics([]string{"someTopic"}, rebalanceCallback)
+func consumerSubscribeTopics(c *kafka.Consumer, topic string, rebalanceCallback kafka.RebalanceCb) {
+	err := c.SubscribeTopics([]string{topic}, rebalanceCallback)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func consumerSubscribe(err error, c *kafka.Consumer, topic string, rebalanceCallback kafka.RebalanceCb) {
-	err = c.Subscribe(topic, rebalanceCallback)
+func consumerSubscribe(c *kafka.Consumer, topic string, rebalanceCallback kafka.RebalanceCb) {
+	err := c.Subscribe(topic, rebalanceCallback)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func consumerAssign(err error, c *kafka.Consumer, topic string) {
-	err = c.Assign([]kafka.TopicPartition{{
+func consumerAssign(c *kafka.Consumer, topic string) {
+	err := c.Assign([]kafka.TopicPartition{{
 		Topic:       &topic,
 		Partition:   1,
 		Offset:      6,
