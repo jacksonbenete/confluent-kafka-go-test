@@ -4,16 +4,12 @@ import (
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"io"
-	"time"
 )
 
-func NewReader(out io.Writer) interface{} {
+func NewReader() *kafka.Consumer {
 	const autoOffsetReset = "earliest"
 	const groupId = "someGroup"
 	const bootstrapServers = "localhost:9094"
-	var topic = "someTopic"
-
-	reads := make(chan string, 3)
 
 	kafkaConsumerConfig := &kafka.ConfigMap{
 		"bootstrap.servers": bootstrapServers,
@@ -25,24 +21,26 @@ func NewReader(out io.Writer) interface{} {
 	if err != nil {
 		panic(err)
 	}
-	defer c.Close()
 
-	var rebalanceCallback kafka.RebalanceCb = nil
-	consumerSubscribeTopics(c, topic, rebalanceCallback)
-	//consumerSubscribe(c, topic, rebalanceCallback)
-	//consumerAssign(c, topic)
+	return c
+}
+
+func consume(out io.Writer, c *kafka.Consumer) {
+	defer c.Close()
+	reads := make(chan string, 3)
 
 	go func() {
 		for range 12 {
-			// ReadMessage is a wrapper around .Poll()
-			msg, err := c.ReadMessage(time.Millisecond * 200)
-			if err == nil { // No error
-				reads <- fmt.Sprintf("%s\n", string(msg.Value))
-			} else if !err.(kafka.Error).IsTimeout() {
-				// The client will automatically try to recover from all errors.
-				// Timeout is not considered an error because it is raised by
-				// ReadMessage in absence of messages.
-				reads <- fmt.Sprintf("Consumer error: %v (%v)\n", err, msg)
+			event := c.Poll(300)
+			if event == nil {
+				continue
+			}
+
+			switch e := event.(type) {
+			case *kafka.Message:
+				reads <- fmt.Sprintf("%d:%s\n", e.TopicPartition.Partition, string(e.Value))
+			case kafka.Error:
+				reads <- fmt.Sprintf("Error: %v\n", e)
 			}
 		}
 		close(reads)
@@ -51,8 +49,6 @@ func NewReader(out io.Writer) interface{} {
 	for c := range reads {
 		fmt.Fprintf(out, c)
 	}
-
-	return nil
 }
 
 func consumerSubscribeTopics(c *kafka.Consumer, topic string, rebalanceCallback kafka.RebalanceCb) {
@@ -69,11 +65,11 @@ func consumerSubscribe(c *kafka.Consumer, topic string, rebalanceCallback kafka.
 	}
 }
 
-func consumerAssign(c *kafka.Consumer, topic string) {
+func consumerAssign(c *kafka.Consumer, topic string, partition int32, offset kafka.Offset) {
 	err := c.Assign([]kafka.TopicPartition{{
 		Topic:       &topic,
-		Partition:   1,
-		Offset:      6,
+		Partition:   partition,
+		Offset:      offset,
 		Metadata:    nil,
 		Error:       nil,
 		LeaderEpoch: nil,
