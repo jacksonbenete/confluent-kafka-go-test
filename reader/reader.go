@@ -30,17 +30,18 @@ func consume(out io.Writer, c *kafka.Consumer) {
 	reads := make(chan string, 3)
 
 	go func() {
-		for range 12 {
-			event := c.Poll(300)
-			if event == nil {
-				continue
-			}
-
+		for i := range 12 {
+			fmt.Printf("loop %d\n", i)
+			event := c.Poll(500)
 			switch e := event.(type) {
 			case *kafka.Message:
+				fmt.Printf("found %d:%s\n", e.TopicPartition.Partition, string(e.Value))
 				reads <- fmt.Sprintf("%d:%s\n", e.TopicPartition.Partition, string(e.Value))
 			case kafka.Error:
-				reads <- fmt.Sprintf("Error: %v\n", e)
+				fmt.Printf("Error: %v\n", e)
+			default:
+				fmt.Printf("nil event\n")
+				continue
 			}
 		}
 		close(reads)
