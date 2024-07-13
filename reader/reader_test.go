@@ -10,7 +10,7 @@ func TestKafkaReader(t *testing.T) {
 	NewReader(buffer)
 
 	got := buffer.String()
-	want := "msg-b"
+	want := "msg-c\nmsg-d\n"
 
 	assertRead(t, got, want)
 }
